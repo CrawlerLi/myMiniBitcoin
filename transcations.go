@@ -62,3 +62,48 @@ func NewCoinBase(toAdress string, data string) *Transaction {
 
 	return tx
 }
+
+func NewTrasaction(from string, to string, amount int, bc *BlockChain) *Transaction {
+	var tx *Transaction
+	payable, acc := bc.FindSpendableUTXOS(amount, from)
+	if acc < amount {
+		fmt.Println("balance of the address is not enough")
+	}
+
+	var Vin []TxInput
+
+	for txID, idxs := range payable {
+		for _, idx := range idxs {
+			txin := TxInput{
+				Txid:      []byte(txID),
+				OutIndex:  idx,
+				Signature: []byte(from),
+			}
+			Vin = append(Vin, txin)
+		}
+	}
+
+	txout := TxOutput{
+		Value:        amount,
+		ScriptPubkey: []byte(to),
+	}
+
+	Vout := []TxOutput{txout}
+
+	if acc > amount {
+		Vout = append(Vout, TxOutput{amount, []byte(from)})
+	}
+
+	tx = &Transaction{
+		Vin:  Vin,
+		Vout: Vout,
+	}
+
+	tx.ID = tx.Hash()
+
+	return tx
+}
+
+func IsCoinBase(tx *Transaction) bool {
+	return len(tx.Vin[0].Txid) == 0 && tx.Vin[0].OutIndex == -1
+}
