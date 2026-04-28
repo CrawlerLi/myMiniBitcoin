@@ -19,4 +19,8 @@ func main() {
 	banlance1 := bc.GetBalance("Bob")
 	fmt.Println("My address balance is ", banlance, "The balance of Bob is ", banlance1)
 
+	Alice := NewWallet()
+
+	fmt.Println("The address of Alice is ", string(Alice.Address))
+
 }
