@@ -8,6 +8,8 @@ RUN go build -o /out/gnode ./cmd
 
 FROM debian:bookworm-slim
 WORKDIR /app
+
+RUN mkdir -p /app/configs /data
 COPY --from=builder /out/gnode /app/
 COPY --from=builder /src/configs /app/configs
 ENTRYPOINT [ "/app/gnode" ]

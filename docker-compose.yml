@@ -1,0 +1,35 @@
+services:
+  node1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gnode:local
+    container_name: gnode-node1
+    command: ["node", "/app/configs/docker_node1.json"]
+    ports:
+      - "5001:5001"
+    volumes:
+      - node1-data:/data
+    networks:
+      - gnode-net
+
+  node2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gnode:local
+    container_name: gnode-node2
+    command: ["node", "/app/configs/docker_node2.json"]
+    ports:
+      - "5002:5002"
+    volumes:
+      - node2-data:/data
+    networks:
+      - gnode-net
+
+volumes:
+  node1-data:
+  node2-data:
+
+networks:
+  gnode-net:

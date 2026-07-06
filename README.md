@@ -206,5 +206,17 @@ Gnode 使用 bbolt 作为嵌入式 KV 数据库。当前主要存储内容包括
 
 链数据库和钱包数据库使用独立文件，便于多个节点使用不同本地状态进行联调。
 
+## 支持docker compose一键启动
+推荐初始化启动流程
+```bash
+docker compose down
+docker compose run --rm node1 init /app/configs/docker_node1.json #[minerAddress]选填
+docker compose run --rm node2 sync-init /app/configs/docker_node2.json #[minerAddress]选填
+docker compose up
+```
 
-
+已初始化，启动流程
+```bash
+docker compose down
+docker compose up
+```
