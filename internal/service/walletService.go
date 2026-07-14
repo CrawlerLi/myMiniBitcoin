@@ -247,24 +247,36 @@ func (ws *WalletService) Transfer(fromUser string, to string, amount int) (*Tran
 		Vout: vout,
 	}
 
+	err = wallet.Sign(tx, prevOutputs)
+	if err != nil {
+		return nil, fmt.Errorf("create new tx: sign new tx: %w", err)
+	}
+
 	txID, err := tx.Hash()
 	if err != nil {
 		return nil, fmt.Errorf("create new tx: hash new tx: %w", err)
 	}
 	tx.ID = txID
 
-	err = wallet.Sign(tx, prevOutputs)
+	workerWallet, err := ws.GetWorkerWallet()
 	if err != nil {
-		return nil, fmt.Errorf("create new tx: sign new tx: %w", err)
+		return nil, fmt.Errorf("transfer: %w", err)
 	}
 
-	NewCoinbaseTx, err := core.NewCoinBase(crypto.HashPubkey(wallet.Publickey))
+	workerPubkeyHash, err := crypto.AddressToPubkeyHash(
+		[]byte(workerWallet.Address),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("transfer: parse worker address: %w", err)
+	}
+
+	NewCoinbaseTx, err := core.NewCoinBase(workerPubkeyHash)
 	if err != nil {
 		return nil, fmt.Errorf("transfer: create new coinbase tx: %w", err)
 	}
 
 	// A memory pool will be implemented here later
-	err = ws.bc.AddBlock([]*core.Transaction{tx, NewCoinbaseTx})
+	err = ws.bc.AddBlock([]*core.Transaction{NewCoinbaseTx, tx})
 	if err != nil {
 		return nil, fmt.Errorf("transfer: write data on-chian %w", err)
 	}
