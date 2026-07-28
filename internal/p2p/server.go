@@ -79,12 +79,6 @@ func (s *Server) GetBlocksFromHeight(_ context.Context, in *pb.GetBlocksFromHeig
 
 }
 
-func NewGRPCServer() *grpc.Server {
-	s := grpc.NewServer()
-	pb.RegisterPeerServiceServer(s, &Server{})
-	return s
-}
-
 func NewServer(addr string, nodeId string) (*Server, error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
