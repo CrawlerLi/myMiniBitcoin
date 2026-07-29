@@ -5,8 +5,17 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	pb "github.com/CrawlerLi/Gnode/internal/p2p/proto"
+	"google.golang.org/grpc"
 )
 
+// using for test
+func NewGRPCServer() *grpc.Server {
+	s := grpc.NewServer()
+	pb.RegisterPeerServiceServer(s, &Server{})
+	return s
+}
 func TestPing(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
