@@ -6,12 +6,15 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/CrawlerLi/Gnode/internal/p2p"
 	"github.com/CrawlerLi/Gnode/internal/service"
 )
+
+const maxConcurrency = 8
 
 type Node struct {
 	AppService *service.AppService
@@ -20,7 +23,8 @@ type Node struct {
 	Addr       string
 	errCh      chan error
 
-	Peers map[string]*p2p.Client
+	peersMu sync.RWMutex
+	Peers   map[string]*p2p.Client
 }
 
 type PingResponse struct {
@@ -112,7 +116,15 @@ func (n *Node) ConnectPeer(peerAddr string) error {
 		return fmt.Errorf("connect peer %s : %w", peerAddr, err)
 	}
 
+	n.peersMu.Lock()
+	oldClient := n.Peers[peerAddr]
 	n.Peers[peerAddr] = client
+
+	n.peersMu.Unlock()
+
+	if oldClient != nil {
+		_ = oldClient.Close()
+	}
 	return nil
 }
 
@@ -135,9 +147,8 @@ func (n *Node) PingPeer(peerAddr string) (*PingResponse, error) {
 	}, nil
 }
 
-func (n *Node) GetPeerChainState(peerAddr string) (*PeerChainState, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+func (n *Node) GetPeerChainState(peerAddr string, ctx context.Context) (*PeerChainState, error) {
+
 	peer, ok := n.Peers[peerAddr]
 	if !ok || peer == nil {
 		return nil, fmt.Errorf("peer %s not connected", peerAddr)
@@ -226,22 +237,51 @@ func (n *Node) Start() error {
 		case <-peerChainStateTicker.C:
 			peerBestHeight := 0
 			peerBestStateAddress := ""
+
+			peerNums := len(n.Peers)
+			peerChainStateResults := make(chan *PeerChainState, peerNums)
+			tokens := make(chan struct{}, maxConcurrency)
+			var wg sync.WaitGroup
+
 			for peerAddr := range n.Peers {
-				peerState, err := n.GetPeerChainState(peerAddr)
-				if err != nil {
-					log.Printf("failed to get peer %s chainstate: %v", peerAddr, err)
-					continue
-				}
-				log.Printf("peer chain state: peer=%s, node=%s height=%d, besthash=%x\n",
-					peerState.PeerAddr,
-					peerState.RemoteNodeID,
-					peerState.Height,
-					peerState.LastHash)
-				if peerBestHeight < peerState.Height {
-					peerBestHeight = peerState.Height
-					peerBestStateAddress = peerAddr
+				tokens <- struct{}{}
+				wg.Add(1)
+
+				go func(peerAddr string) {
+					defer func() {
+						<-tokens
+						wg.Done()
+					}()
+
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer cancel()
+
+					peerState, err := n.GetPeerChainState(peerAddr, ctx)
+					if err != nil {
+						log.Printf("failed to get peer %s chainstate: %v", peerAddr, err)
+						return
+					}
+
+					log.Printf("peer chain state: peer=%s, node=%s height=%d, besthash=%x\n",
+						peerState.PeerAddr,
+						peerState.RemoteNodeID,
+						peerState.Height,
+						peerState.LastHash)
+					peerChainStateResults <- peerState
+
+				}(peerAddr)
+
+			}
+
+			wg.Wait()
+			close(peerChainStateResults)
+			for r := range peerChainStateResults {
+				if r.Height > peerBestHeight {
+					peerBestHeight = r.Height
+					peerBestStateAddress = r.PeerAddr
 				}
 			}
+
 			localBestState, err := n.AppService.ChainService.GetChainState()
 			if err != nil {
 				return fmt.Errorf("run node : %w", err)
